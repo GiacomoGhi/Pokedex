@@ -69,7 +69,7 @@ public readonly struct Result
     public static Result Error<TInput>(Result<TInput> errorResult) where TInput : class
         => new()
         {
-            StatusCode = ResultStatus.Error,
+            StatusCode = errorResult.StatusCode,
             Message = errorResult.Message
         };
 
