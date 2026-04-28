@@ -4,7 +4,7 @@ using Pokedex.Core.Services.FunTranslations;
 using Pokedex.Core.Services.PokeApi;
 using Pokedex.Core.Services.Pokemon;
 
-namespace Pokedex.Core.Tests.Services.Pokemon;
+namespace Pokedex.Core.Tests.UnitTests.Services.Pokemon;
 
 public class PokemonServiceTests
 {
