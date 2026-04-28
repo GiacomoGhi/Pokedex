@@ -14,4 +14,14 @@ public class PokedexSettings
     /// FunTranslations client and cache settings.
     /// </summary>
     public FunTranslationsSettings FunTranslations { get; set; } = default!;
+
+    /// <summary>
+    /// Global in-memory cache settings.
+    /// </summary>
+    public CacheSettings Cache { get; set; } = default!;
+
+    /// <summary>
+    /// Inbound rate-limiting settings.
+    /// </summary>
+    public RateLimitSettings RateLimit { get; set; } = default!;
 }
