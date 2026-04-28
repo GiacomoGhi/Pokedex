@@ -1,0 +1,9 @@
+**/.vs
+**/.git
+**/bin
+**/obj
+**/TestResults
+**/*.user
+**/.dockerignore
+**/Dockerfile
+README.md
