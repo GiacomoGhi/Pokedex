@@ -17,11 +17,19 @@ public static class PokemonEndpoints
 
         pokemonGroup.MapGet("/translated/{name}", GetTranslatedAsync)
             .WithName("GetTranslatedPokemon")
-            .WithDescription("Fetches a Pokemon with a fun-translated description (Yoda for legendary/cave habitat, Shakespeare otherwise)");
+            .WithDescription("Fetches a Pokemon with a fun-translated description (Yoda for legendary/cave habitat, Shakespeare otherwise)")
+            .Produces<Pokemon>(StatusCodes.Status200OK)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status429TooManyRequests);
 
         pokemonGroup.MapGet("/{name}", GetBasicAsync)
             .WithName("GetPokemon")
-            .WithDescription("Fetches a Pokemon's standard info (name, description, habitat, isLegendary)");
+            .WithDescription("Fetches a Pokemon's standard info (name, description, habitat, isLegendary)")
+            .Produces<Pokemon>(StatusCodes.Status200OK)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status429TooManyRequests);
     }
 
     private static async Task<IResult> GetBasicAsync(

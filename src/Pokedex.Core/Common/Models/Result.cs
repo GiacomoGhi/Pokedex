@@ -1,4 +1,4 @@
-﻿using System.Diagnostics.CodeAnalysis;
+using System.Diagnostics.CodeAnalysis;
 
 namespace Pokedex.Core.Common.Models;
 
@@ -7,15 +7,13 @@ public enum ResultStatus
     Success,
     Error,
     InvalidArgument,
-    Forbidden,
     NotFound,
-    Unauthorized,
 }
 
 public readonly struct Result
 {
     /// <summary>
-    /// Inidicates whether the result has a non-success status code.
+    /// Indicates whether the result has a non-success status code.
     /// </summary>
     [MemberNotNullWhen(true, nameof(Message))]
     public bool HasNonSuccessStatusCode => StatusCode != ResultStatus.Success;
@@ -65,42 +63,26 @@ public readonly struct Result
             Message = msg
         };
 
-    /// <inheritdoc cref="Error(string)"/>
-    public static Result Error<TInput>(Result<TInput> errorResult) where TInput : class
+    /// <summary>
+    /// Forwards the failure status of an upstream <see cref="Result{TInput}"/> onto a
+    /// non-generic <see cref="Result"/>. Use to propagate a typed error to a caller that
+    /// does not care about the original payload type.
+    /// </summary>
+    public static Result Propagate<TInput>(Result<TInput> source) where TInput : class
         => new()
         {
-            StatusCode = errorResult.StatusCode,
-            Message = errorResult.Message
+            StatusCode = source.StatusCode,
+            Message = source.Message
         };
 
     /// <summary>
-    /// Create a new result with error status code and the provided error message.
+    /// Create a new result with invalid argument status code and the provided error message.
     /// </summary>
     public static Result InvalidArgument(string msg)
         => new()
         {
             StatusCode = ResultStatus.InvalidArgument,
             Message = $"Invalid argument: {msg}"
-        };
-
-    /// <summary>
-    /// Create a new result with forbidden status code.
-    /// </summary>
-    public static Result Forbidden()
-        => new()
-        {
-            StatusCode = ResultStatus.Forbidden,
-            Message = "Operation not allowed"
-        };
-
-    /// <summary>
-    /// Create a new result with unauthorized status code.
-    /// </summary>
-    public static Result Unauthorized()
-        => new()
-        {
-            StatusCode = ResultStatus.Unauthorized,
-            Message = "Unauthorized access"
         };
 
     /// <summary>
@@ -131,7 +113,7 @@ public readonly struct Result<T>
     public T? Data { get; init; }
 
     /// <summary>
-    /// Implicitly convert a Result to a Result<T>.
+    /// Implicitly convert a Result to a Result&lt;T&gt;.
     /// </summary>
     public static implicit operator Result<T>(Result result)
     {
@@ -171,16 +153,6 @@ public readonly struct Result<T>
         {
             StatusCode = ResultStatus.InvalidArgument,
             Message = $"Invalid argument: {msg}",
-        };
-
-    /// <summary>
-    /// Create a new result with forbidden status code.
-    /// </summary>
-    public static Result<T> Forbidden()
-        => new()
-        {
-            StatusCode = ResultStatus.Forbidden,
-            Message = "Operation not allowed",
         };
 
     /// <summary>

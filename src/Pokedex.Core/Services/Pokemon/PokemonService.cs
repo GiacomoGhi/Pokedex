@@ -22,7 +22,7 @@ internal class PokemonService(
         var speciesResult = await this.FetchSpeciesAsync(name, cancellationToken);
         if (speciesResult.HasNonSuccessStatusCode)
         {
-            return Result.Error(speciesResult);
+            return Result.Propagate(speciesResult);
         }
 
         return Result.Success(MapToPokemon(speciesResult.Data!));
@@ -35,7 +35,7 @@ internal class PokemonService(
         var speciesResult = await this.FetchSpeciesAsync(name, cancellationToken);
         if (speciesResult.HasNonSuccessStatusCode)
         {
-            return Result.Error(speciesResult);
+            return Result.Propagate(speciesResult);
         }
 
         // Map and choose translation style

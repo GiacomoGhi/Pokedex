@@ -22,9 +22,7 @@ public static class EndpointResultExtensions
         {
             ResultStatus.InvalidArgument => Results.BadRequest(new { error = result.Message }),
             ResultStatus.NotFound => Results.NotFound(new { error = result.Message }),
-            ResultStatus.Unauthorized => Results.Unauthorized(),
-            ResultStatus.Forbidden => Results.Forbid(),
-            _ => Results.BadRequest(new { error = result.Message }),
+            _ => Results.Problem(result.Message, statusCode: StatusCodes.Status500InternalServerError),
         };
     }
 }
