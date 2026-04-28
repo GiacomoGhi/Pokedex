@@ -1,4 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
+using Pokedex.Core.Common.Caching;
 using Pokedex.Core.Infrastructure;
 using Pokedex.Core.Services.FunTranslations;
 using Pokedex.Core.Services.PokeApi;
@@ -61,8 +62,10 @@ public class IntegrationTestFixture : IAsyncDisposable
             };
         });
 
-        // Single shared cache – cache keys are namespaced per upstream so there's no collision
+        // Single shared cache – cache keys are namespaced per upstream so there's no collision.
+        // SingleFlightCache wraps it with single-flight semantics, matching production wiring.
         services.AddMemoryCache(options => options.SizeLimit = 100);
+        services.AddSingleton<SingleFlightCache>();
 
         // Typed clients – the per-fixture CountingHandler is wired in as the primary handler
         // so every outbound request flows through it and increments the counter.

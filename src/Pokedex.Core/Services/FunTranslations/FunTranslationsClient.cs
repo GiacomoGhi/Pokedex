@@ -4,6 +4,8 @@ using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Options;
+using Pokedex.Core.Common.Caching;
+using Pokedex.Core.Common.Json;
 using Pokedex.Core.Common.Models;
 using Pokedex.Core.Infrastructure;
 
@@ -11,55 +13,36 @@ namespace Pokedex.Core.Services.FunTranslations;
 
 internal class FunTranslationsClient(
     HttpClient httpClient,
-    IMemoryCache cache,
+    SingleFlightCache cache,
     IOptions<PokedexSettings> settings) : IFunTranslationsClient
 {
-    private const string CACHE_KEY_PREFIX = "funtranslations:";
-
-    private static readonly JsonSerializerOptions _jsonOptions = new()
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
-    };
-
     private readonly HttpClient _httpClient = httpClient;
-    private readonly IMemoryCache _cache = cache;
+    private readonly SingleFlightCache _cache = cache;
     private readonly FunTranslationsSettings _settings = settings.Value.FunTranslations;
 
     /// <inheritdoc/>
     public async Task<Result<string>> TranslateAsync(TranslationStyle style, string text, CancellationToken cancellationToken)
     {
-        // Check params
         if (string.IsNullOrWhiteSpace(text))
         {
             return Result.InvalidArgument(nameof(text));
         }
 
-        // Cache lookup – key is namespaced by style so the same text translated with two
-        // different styles is stored independently
         var cacheKey = BuildCacheKey(style, text);
-        if (_cache.TryGetValue(cacheKey, out string? cached) && cached is not null)
-        {
-            return Result.Success(cached);
-        }
 
-        // Upstream call
-        var result = await this.FetchTranslationAsync(style, text, cancellationToken);
-
-        // Only cache successful translations – errors should be retryable on the next call
-        if (!result.HasNonSuccessStatusCode && result.Data is not null)
-        {
-            _cache.Set(cacheKey, result.Data, new MemoryCacheEntryOptions
+        return await _cache.GetOrCreateAsync(
+            cacheKey,
+            ct => this.FetchTranslationAsync(style, text, ct),
+            result => result.HasNonSuccessStatusCode ? null : new MemoryCacheEntryOptions
             {
                 AbsoluteExpirationRelativeToNow = TimeSpan.FromHours(_settings.SuccessTtlHours),
                 Size = 1,
-            });
-        }
-
-        return result;
+            },
+            cancellationToken);
     }
 
     /// <summary>
-    /// Issues a single POST against <c>/translate/{style}.json</c> with form-encoded
+    /// Issues a single POST against <c>/translate/{style}</c> with form-encoded
     /// <c>text</c> body and unwraps the nested <c>contents.translated</c> field. Network,
     /// non-2xx and JSON failures all collapse to <see cref="ResultStatus.Error"/> so the
     /// service layer can fall back to the standard description without exception handling.
@@ -79,7 +62,7 @@ internal class FunTranslationsClient(
                 return Result.Error($"FunTranslations returned {(int)response.StatusCode}");
             }
 
-            var translation = await response.Content.ReadFromJsonAsync<TranslationResponse>(_jsonOptions, cancellationToken);
+            var translation = await response.Content.ReadFromJsonAsync<TranslationResponse>(SnakeCaseJson.Options, cancellationToken);
             var translated = translation?.Contents?.Translated;
             if (string.IsNullOrEmpty(translated))
             {
@@ -87,6 +70,10 @@ internal class FunTranslationsClient(
             }
 
             return Result.Success(translated);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            return Result.Error("FunTranslations request timed out");
         }
         catch (HttpRequestException ex)
         {
@@ -106,7 +93,7 @@ internal class FunTranslationsClient(
     private static string BuildCacheKey(TranslationStyle style, string text)
     {
         var digest = SHA256.HashData(Encoding.UTF8.GetBytes(text));
-        return $"{CACHE_KEY_PREFIX}{StyleToPath(style)}:{Convert.ToHexString(digest)}";
+        return $"{SingleFlightCache.FunTranslationsPrefix}{StyleToPath(style)}:{Convert.ToHexString(digest)}";
     }
 
     /// <summary>

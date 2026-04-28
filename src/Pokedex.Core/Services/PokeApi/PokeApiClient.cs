@@ -3,6 +3,8 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Options;
+using Pokedex.Core.Common.Caching;
+using Pokedex.Core.Common.Json;
 using Pokedex.Core.Common.Models;
 using Pokedex.Core.Infrastructure;
 
@@ -10,47 +12,29 @@ namespace Pokedex.Core.Services.PokeApi;
 
 internal class PokeApiClient(
     HttpClient httpClient,
-    IMemoryCache cache,
+    SingleFlightCache cache,
     IOptions<PokedexSettings> settings) : IPokeApiClient
 {
-    private const string CACHE_KEY_PREFIX = "pokeapi:species:";
-
-    private static readonly JsonSerializerOptions _jsonOptions = new()
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
-    };
-
     private readonly HttpClient _httpClient = httpClient;
-    private readonly IMemoryCache _cache = cache;
+    private readonly SingleFlightCache _cache = cache;
     private readonly PokeApiSettings _settings = settings.Value.PokeApi;
 
     /// <inheritdoc/>
     public async Task<Result<PokemonSpecies>> GetSpeciesAsync(string name, CancellationToken cancellationToken)
     {
-        // Check params
         if (string.IsNullOrWhiteSpace(name))
         {
             return Result.InvalidArgument(nameof(name));
         }
 
-        // Cache lookup – store the Result itself so 404s short-circuit subsequent calls
-        var cacheKey = CACHE_KEY_PREFIX + name;
-        if (_cache.TryGetValue(cacheKey, out Result<PokemonSpecies> cached))
-        {
-            return cached;
-        }
+        var normalisedName = name.ToLowerInvariant();
+        var cacheKey = SingleFlightCache.PokeApiSpeciesPrefix + normalisedName;
 
-        // Upstream call
-        var result = await this.FetchSpeciesAsync(name, cancellationToken);
-
-        // Cache the outcome with a status-specific TTL; transport errors are never cached
-        var entryOptions = this.BuildCacheEntryOptions(result.StatusCode);
-        if (entryOptions is not null)
-        {
-            _cache.Set(cacheKey, result, entryOptions);
-        }
-
-        return result;
+        return await _cache.GetOrCreateAsync(
+            cacheKey,
+            ct => this.FetchSpeciesAsync(normalisedName, ct),
+            result => this.BuildCacheEntryOptions(result.StatusCode),
+            cancellationToken);
     }
 
     /// <summary>
@@ -74,13 +58,17 @@ internal class PokeApiClient(
                 return Result.Error($"PokeAPI returned {(int)response.StatusCode}");
             }
 
-            var species = await response.Content.ReadFromJsonAsync<PokemonSpecies>(_jsonOptions, cancellationToken);
+            var species = await response.Content.ReadFromJsonAsync<PokemonSpecies>(SnakeCaseJson.Options, cancellationToken);
             if (species is null)
             {
                 return Result.Error("PokeAPI returned an empty response body");
             }
 
             return Result.Success(species);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            return Result.Error("PokeAPI request timed out");
         }
         catch (HttpRequestException ex)
         {

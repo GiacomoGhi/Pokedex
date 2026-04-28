@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Pokedex.Core.Common.Caching;
 using Pokedex.Core.Services.FunTranslations;
 using Pokedex.Core.Services.PokeApi;
 using Pokedex.Core.Services.Pokemon;
@@ -45,8 +46,10 @@ public static class ConfigurationExtensions
                 "Pokedex:RateLimit values must be positive.")
             .ValidateOnStart();
 
-        // Shared in-memory cache – every cache entry is sized at 1 so the limit is in entry count
+        // Shared in-memory cache – every cache entry is sized at 1 so the limit is in entry count.
+        // SingleFlightCache wraps it with per-key single-flight semantics (no cache stampede).
         services.AddMemoryCache(options => options.SizeLimit = settings.Cache.MaxEntries);
+        services.AddSingleton<SingleFlightCache>();
 
         // Typed HTTP clients – BaseAddress comes from configuration so dev / prod / mirror
         // swaps require no code changes
