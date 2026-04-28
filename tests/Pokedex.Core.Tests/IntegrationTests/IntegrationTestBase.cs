@@ -6,11 +6,15 @@ namespace Pokedex.Core.Tests.IntegrationTests;
 /// </summary>
 public class IntegrationTestBase
 {
-    protected readonly IntegrationTestFixture _fixture = new();
+    protected IntegrationTestFixture _fixture = null!;
 
-    /// <summary>
-    /// Disposes the per-test DI container after each test runs.
-    /// </summary>
+    [Before(Test)]
+    public Task Setup()
+    {
+        _fixture = new IntegrationTestFixture();
+        return Task.CompletedTask;
+    }
+
     [After(Test)]
     public async Task Cleanup() => await _fixture.DisposeAsync();
 }

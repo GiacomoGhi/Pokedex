@@ -39,7 +39,7 @@ public class PokemonServiceTests
     {
         // Arrange
         _pokeApiClient
-            .GetSpeciesAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .GetSpeciesAsync("missing", Arg.Any<CancellationToken>())
             .Returns(Result.NotFound("missing"));
 
         // Act
@@ -54,7 +54,7 @@ public class PokemonServiceTests
     {
         // Arrange
         _pokeApiClient
-            .GetSpeciesAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .GetSpeciesAsync("mewtwo", Arg.Any<CancellationToken>())
             .Returns(Result.Error("upstream timeout"));
 
         // Act
@@ -91,7 +91,7 @@ public class PokemonServiceTests
             ],
         };
         _pokeApiClient
-            .GetSpeciesAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .GetSpeciesAsync("mewtwo", Arg.Any<CancellationToken>())
             .Returns(Result.Success(species));
 
         // Act
@@ -127,7 +127,7 @@ public class PokemonServiceTests
             ],
         };
         _pokeApiClient
-            .GetSpeciesAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .GetSpeciesAsync("missingno", Arg.Any<CancellationToken>())
             .Returns(Result.Success(species));
 
         // Act
@@ -142,11 +142,7 @@ public class PokemonServiceTests
     public async Task GetBasicAsync_NormalisesNameBeforeCallingClient()
     {
         // Arrange
-        var species = new PokemonSpecies
-        {
-            Name = "mewtwo",
-            FlavorTextEntries = [],
-        };
+        var species = new PokemonSpecies { Name = "mewtwo", FlavorTextEntries = [] };
         _pokeApiClient
             .GetSpeciesAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
             .Returns(Result.Success(species));
@@ -175,7 +171,7 @@ public class PokemonServiceTests
     {
         // Arrange
         _pokeApiClient
-            .GetSpeciesAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .GetSpeciesAsync("missing", Arg.Any<CancellationToken>())
             .Returns(Result.NotFound("missing"));
 
         // Act
@@ -188,55 +184,66 @@ public class PokemonServiceTests
             .TranslateAsync(Arg.Any<TranslationStyle>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
     }
 
+    // §5.3 — case-insensitive habitat matching is tested for all three casings
     [Test]
-    public async Task GetTranslatedAsync_WithCaveHabitat_UsesYoda()
+    [Arguments("cave")]
+    [Arguments("CAVE")]
+    [Arguments("Cave")]
+    public async Task GetTranslatedAsync_WithCaveHabitat_CallsTranslatorWithYoda(string habitatCasing)
     {
         // Arrange
-        ArrangeSpecies(habitat: "cave", isLegendary: false);
+        ArrangeSpecies(habitat: habitatCasing, isLegendary: false);
         ArrangeTranslator(TranslationStyle.Yoda, TRANSLATED_DESCRIPTION);
 
         // Act
-        var result = await _service.GetTranslatedAsync("zubat", CancellationToken.None);
-
+        await _service.GetTranslatedAsync("zubat", CancellationToken.None);
+        
         // Assert
-        await Assert.That(result.StatusCode).IsEqualTo(ResultStatus.Success);
-        await Assert.That(result.Data!.Description).IsEqualTo(TRANSLATED_DESCRIPTION);
         await _funTranslationsClient
             .Received(1)
             .TranslateAsync(TranslationStyle.Yoda, STANDARD_DESCRIPTION, Arg.Any<CancellationToken>());
     }
 
     [Test]
-    public async Task GetTranslatedAsync_WithLegendary_UsesYoda()
+    public async Task GetTranslatedAsync_WithLegendary_CallsTranslatorWithYoda()
     {
         // Arrange
         ArrangeSpecies(habitat: "rare", isLegendary: true);
         ArrangeTranslator(TranslationStyle.Yoda, TRANSLATED_DESCRIPTION);
 
         // Act
-        var result = await _service.GetTranslatedAsync("mewtwo", CancellationToken.None);
+        await _service.GetTranslatedAsync("mewtwo", CancellationToken.None);
 
         // Assert
-        await Assert.That(result.StatusCode).IsEqualTo(ResultStatus.Success);
-        await Assert.That(result.Data!.Description).IsEqualTo(TRANSLATED_DESCRIPTION);
         await _funTranslationsClient
             .Received(1)
             .TranslateAsync(TranslationStyle.Yoda, STANDARD_DESCRIPTION, Arg.Any<CancellationToken>());
     }
 
     [Test]
-    public async Task GetTranslatedAsync_WhenNotCaveAndNotLegendary_UsesShakespeare()
+    public async Task GetTranslatedAsync_WithLegendaryAndNullHabitat_CallsTranslatorWithYoda()
+    {
+        ArrangeSpecies(habitat: null, isLegendary: true);
+        ArrangeTranslator(TranslationStyle.Yoda, TRANSLATED_DESCRIPTION);
+
+        await _service.GetTranslatedAsync("phantom", CancellationToken.None);
+
+        await _funTranslationsClient
+            .Received(1)
+            .TranslateAsync(TranslationStyle.Yoda, STANDARD_DESCRIPTION, Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task GetTranslatedAsync_WhenNotCaveAndNotLegendary_CallsTranslatorWithShakespeare()
     {
         // Arrange
         ArrangeSpecies(habitat: "grassland", isLegendary: false);
         ArrangeTranslator(TranslationStyle.Shakespeare, TRANSLATED_DESCRIPTION);
 
         // Act
-        var result = await _service.GetTranslatedAsync("pikachu", CancellationToken.None);
+        await _service.GetTranslatedAsync("pikachu", CancellationToken.None);
 
         // Assert
-        await Assert.That(result.StatusCode).IsEqualTo(ResultStatus.Success);
-        await Assert.That(result.Data!.Description).IsEqualTo(TRANSLATED_DESCRIPTION);
         await _funTranslationsClient
             .Received(1)
             .TranslateAsync(TranslationStyle.Shakespeare, STANDARD_DESCRIPTION, Arg.Any<CancellationToken>());
@@ -250,13 +257,25 @@ public class PokemonServiceTests
         ArrangeTranslator(TranslationStyle.Shakespeare, TRANSLATED_DESCRIPTION);
 
         // Act
-        var result = await _service.GetTranslatedAsync("missingno", CancellationToken.None);
+        await _service.GetTranslatedAsync("missingno", CancellationToken.None);
 
         // Assert
-        await Assert.That(result.StatusCode).IsEqualTo(ResultStatus.Success);
         await _funTranslationsClient
             .Received(1)
             .TranslateAsync(TranslationStyle.Shakespeare, STANDARD_DESCRIPTION, Arg.Any<CancellationToken>());
+    }
+
+    // §5.2 — verify the translator's response is placed onto the DTO
+    [Test]
+    public async Task GetTranslatedAsync_AppliesTranslatorResponseToDescription()
+    {
+        ArrangeSpecies(habitat: "grassland", isLegendary: false);
+        ArrangeTranslator(TranslationStyle.Shakespeare, TRANSLATED_DESCRIPTION);
+
+        var result = await _service.GetTranslatedAsync("pikachu", CancellationToken.None);
+
+        await Assert.That(result.StatusCode).IsEqualTo(ResultStatus.Success);
+        await Assert.That(result.Data!.Description).IsEqualTo(TRANSLATED_DESCRIPTION);
     }
 
     [Test]
@@ -266,7 +285,7 @@ public class PokemonServiceTests
         ArrangeSpecies(habitat: "grassland", isLegendary: false);
         _funTranslationsClient
             .TranslateAsync(Arg.Any<TranslationStyle>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
-            .Returns(Result<string>.Error("rate limited"));
+            .Returns(Result.Error("rate limited"));
 
         // Act
         var result = await _service.GetTranslatedAsync("pikachu", CancellationToken.None);
