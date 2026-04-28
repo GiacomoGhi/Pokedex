@@ -1,11 +1,11 @@
-using System.Text;
+using System.Text.RegularExpressions;
 using Pokedex.Core.Common.Models;
 using Pokedex.Core.Services.FunTranslations;
 using Pokedex.Core.Services.PokeApi;
 
 namespace Pokedex.Core.Services.Pokemon;
 
-internal class PokemonService(
+internal partial class PokemonService(
     IPokeApiClient pokeApiClient,
     IFunTranslationsClient funTranslationsClient) : IPokemonService
 {
@@ -45,12 +45,11 @@ internal class PokemonService(
 
         // Apply translation, fall back to the standard description on any failure
         var translationResult = await _funTranslationsClient.TranslateAsync(style, pokemon.Description, cancellationToken);
-        if (!translationResult.HasNonSuccessStatusCode && !string.IsNullOrEmpty(translationResult.Data))
-        {
-            pokemon.Description = translationResult.Data;
-        }
+        var finalPokemon = !translationResult.HasNonSuccessStatusCode && !string.IsNullOrEmpty(translationResult.Data)
+            ? pokemon with { Description = translationResult.Data }
+            : pokemon;
 
-        return Result.Success(pokemon);
+        return Result.Success(finalPokemon);
     }
 
     /// <summary>
@@ -112,31 +111,10 @@ internal class PokemonService(
         return NormaliseWhitespace(englishEntry.FlavorText);
     }
 
-    /// <summary>
-    /// Collapses runs of whitespace (including newlines and form-feeds emitted by PokeAPI)
-    /// into single spaces and trims the result.
-    /// </summary>
-    private static string NormaliseWhitespace(string text)
-    {
-        var builder = new StringBuilder(text.Length);
-        var lastWasWhitespace = true;
-        foreach (var character in text)
-        {
-            if (char.IsWhiteSpace(character))
-            {
-                if (!lastWasWhitespace)
-                {
-                    builder.Append(' ');
-                    lastWasWhitespace = true;
-                }
-            }
-            else
-            {
-                builder.Append(character);
-                lastWasWhitespace = false;
-            }
-        }
+    private static string NormaliseWhitespace(string text) =>
+        WhitespaceRegex().Replace(text, " ").Trim();
 
-        return builder.ToString().TrimEnd();
-    }
+    [GeneratedRegex(@"\s+", RegexOptions.Compiled)]
+    private static partial Regex WhitespaceRegex();
+
 }
