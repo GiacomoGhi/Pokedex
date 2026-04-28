@@ -1,30 +1,25 @@
 using System.Text;
 using Pokedex.Core.Common.Models;
+using Pokedex.Core.Services.FunTranslations;
 using Pokedex.Core.Services.PokeApi;
 
 namespace Pokedex.Core.Services.Pokemon;
 
 internal class PokemonService(
-    IPokeApiClient pokeApiClient) : IPokemonService
+    IPokeApiClient pokeApiClient,
+    IFunTranslationsClient funTranslationsClient) : IPokemonService
 {
     private const string ENGLISH_LANGUAGE_CODE = "en";
+    private const string CAVE_HABITAT = "cave";
 
     private readonly IPokeApiClient _pokeApiClient = pokeApiClient;
+    private readonly IFunTranslationsClient _funTranslationsClient = funTranslationsClient;
 
     /// <inheritdoc/>
     public async Task<Result<Pokemon>> GetBasicAsync(string name, CancellationToken cancellationToken)
     {
-        // Check params
-        if (string.IsNullOrWhiteSpace(name))
-        {
-            return Result.InvalidArgument(nameof(name));
-        }
-
-        // Normalise name and call client
-        var normalisedName = name.Trim().ToLowerInvariant();
-        var speciesResult = await _pokeApiClient.GetSpeciesAsync(normalisedName, cancellationToken);
-
-        // Check result
+        // Fetch species
+        var speciesResult = await this.FetchSpeciesAsync(name, cancellationToken);
         if (speciesResult.HasNonSuccessStatusCode)
         {
             return Result.Error(speciesResult);
@@ -34,9 +29,58 @@ internal class PokemonService(
     }
 
     /// <inheritdoc/>
-    public Task<Result<Pokemon>> GetTranslatedAsync(string name, CancellationToken cancellationToken)
+    public async Task<Result<Pokemon>> GetTranslatedAsync(string name, CancellationToken cancellationToken)
     {
-        throw new NotImplementedException();
+        // Fetch species
+        var speciesResult = await this.FetchSpeciesAsync(name, cancellationToken);
+        if (speciesResult.HasNonSuccessStatusCode)
+        {
+            return Result.Error(speciesResult);
+        }
+
+        // Map and choose translation style
+        var species = speciesResult.Data!;
+        var pokemon = MapToPokemon(species);
+        var style = ChooseTranslationStyle(species);
+
+        // Apply translation, fall back to the standard description on any failure
+        var translationResult = await _funTranslationsClient.TranslateAsync(style, pokemon.Description, cancellationToken);
+        if (!translationResult.HasNonSuccessStatusCode && !string.IsNullOrEmpty(translationResult.Data))
+        {
+            pokemon.Description = translationResult.Data;
+        }
+
+        return Result.Success(pokemon);
+    }
+
+    /// <summary>
+    /// Validates the requested Pokemon name and forwards the normalised value to the
+    /// PokeAPI client. Centralised so both endpoints share the same input contract.
+    /// </summary>
+    private async Task<Result<PokemonSpecies>> FetchSpeciesAsync(string name, CancellationToken cancellationToken)
+    {
+        // Check params
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            return Result.InvalidArgument(nameof(name));
+        }
+
+        var normalisedName = name.Trim().ToLowerInvariant();
+        return await _pokeApiClient.GetSpeciesAsync(normalisedName, cancellationToken);
+    }
+
+    /// <summary>
+    /// Picks <see cref="TranslationStyle.Yoda"/> for legendary or cave-dwelling species,
+    /// <see cref="TranslationStyle.Shakespeare"/> for everything else.
+    /// </summary>
+    private static TranslationStyle ChooseTranslationStyle(PokemonSpecies species)
+    {
+        if (species.IsLegendary || string.Equals(species.Habitat?.Name, CAVE_HABITAT, StringComparison.OrdinalIgnoreCase))
+        {
+            return TranslationStyle.Yoda;
+        }
+
+        return TranslationStyle.Shakespeare;
     }
 
     /// <summary>
