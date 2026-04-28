@@ -16,7 +16,7 @@ namespace Pokedex.Core.Tests.IntegrationTests;
 public class IntegrationTestFixture : IAsyncDisposable
 {
     private const string POKE_API_BASE_URL = "https://pokeapi.co/api/v2/";
-    private const string FUN_TRANSLATIONS_BASE_URL = "https://funtranslations.mercxry.me/";
+    private const string FUN_TRANSLATIONS_BASE_URL = "https://api.funtranslations.mercxry.me/v1/";
 
     private readonly ServiceProvider _serviceProvider;
 
