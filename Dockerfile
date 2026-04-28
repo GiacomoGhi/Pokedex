@@ -1,5 +1,5 @@
 # --- build ---
-FROM mcr.microsoft.com/dotnet/sdk:10.0-preview AS build
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 
 # Copy csproj files first to maximise layer caching on dependency restore
@@ -17,11 +17,13 @@ RUN dotnet publish "src/Pokedex.Api/Pokedex.Api.csproj" \
     /p:UseAppHost=false
 
 # --- runtime ---
-FROM mcr.microsoft.com/dotnet/aspnet:10.0-preview AS final
+FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS final
 WORKDIR /app
 COPY --from=build /app/publish .
 
 ENV ASPNETCORE_URLS=http://+:8080
 EXPOSE 8080
+
+USER app
 
 ENTRYPOINT ["dotnet", "Pokedex.Api.dll"]
